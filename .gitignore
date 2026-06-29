@@ -1,0 +1,12 @@
+# Build output
+manuscript.md
+*.pdf
+eval_logs/
+__pycache__/
+*.pyc
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
