@@ -72,9 +72,6 @@ Each chapter starts at **10.0**. Errors deduct 0.5, warnings 0.15. Novel score =
 - `xelatex` (TeX Live)
 - No network, no API keys.
 
-## Provenance
-
-Extracted from the `Bound by Ash and Thorn` project after successful publication of a 27-chapter, 99,772-word romantasy novel (eval score 9.626/10, 307-page PDF, clean TOC). Refactored for general use. Supersedes `romantasy-autonovel` (the generator scaffold that lives on top of this pipeline).
 
 ## License
 
