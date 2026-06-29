@@ -94,4 +94,4 @@ my-novel/
 
 ## Provenance
 
-Extracted from a completed long-form novel production pipeline (27 chapters, ~100k words, eval score 9.6/10, ~300-page PDF, clean TOC). Refactored for general use; named `Zo-autonovel` to supersede prior scaffolding.
+Extracted and generalized from a completed long-form novel production pipeline. Project-agnostic: no embedded novel-specific identifiers, chapter counts, word counts, or scoring baselines.
