@@ -1,4 +1,4 @@
-# autonovel-pipeline
+# Zo-autonovel
 
 Operational pipeline for AI-generated long-form novels — eval, repair, assemble, and render.
 
