@@ -40,9 +40,10 @@ EVAL_LOGS_DIR = ROOT / "eval_logs"
 
 MAX_PER_CHAPTER = 3
 
-# Motifs with the substitutions applied to FILLER instances.
-# Order matters: longer/more-specific patterns first.
-MOTIF_RULES = [
+# Default motif rules used when no motifs.yaml is present at the project root.
+# In a new project, create motifs.yaml in the project root with the same
+# structure (list of dicts with name/regex/skip_patterns/rewrites) to override.
+DEFAULT_MOTIF_RULES = [
     # 'I am a cartographer who ...' / 'I am a cartographer' -> protected
     # 'cartographers' as profession -> surveyor / cartograph-* rewrite is too
     # destructive; use minimal-synonym rotation that preserves context.
@@ -175,6 +176,16 @@ MOTIF_RULES = [
     },
 ]
 
+
+def load_motifs(project_root: Path) -> list[dict]:
+    """Load motif rules from motifs.yaml if present, else return DEFAULT_MOTIF_RULES."""
+    motifs_file = project_root / "motifs.yaml"
+    if motifs_file.exists():
+        with motifs_file.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    return DEFAULT_MOTIF_RULES
+
+
 # Metaphor-saturation fix: per paragraph, if it has 3+ metaphor markers,
 # convert the 3rd-and-onward "like Y" pattern to "as Y".
 # This is intentionally minimal — only flattens the most formulaic structure.
@@ -230,7 +241,8 @@ def fix_chapter(path: Path, dry_run: bool = True, max_per: int = MAX_PER_CHAPTER
     changes: list[Change] = []
 
     # Per-motif occurrence count + state.
-    for motif in MOTIF_RULES:
+    rules = load_motifs(ROOT)
+    for motif in rules:
         occurrences = list(motif["regex"].finditer(text))
         # Walk backwards so positions don't shift as we rewrite.
         rewrite_idx_counter = [0]

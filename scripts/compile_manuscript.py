@@ -21,11 +21,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CHAPTERS_DIR = ROOT / "chapters"
 MANUSCRIPT = ROOT / "manuscript.md"
-INTRO = (
-    "# Novel Manuscript\n\n"
-    "*The Withered Court, Book One* — *A novel by Jonathan Thorne — 99,000+ words, 26 chapters*\n\n"
-    "---\n\n"
-)
+# Title page from book metadata (novel.json)
+META_FILE = ROOT / "novel.json"
+import json
+
+
+def load_intro() -> str:
+    try:
+        with open(META_FILE) as f:
+            data = json.load(f)
+        title = data.get("title", "Novel Manuscript")
+        return f"# {title}\n\n"
+    except (FileNotFoundError, json.JSONDecodeError):
+        return "# Novel Manuscript\n\n"
 
 
 def chapter_sort_key(path: Path) -> tuple[int, int, str]:
@@ -52,7 +60,7 @@ def collect_chapters() -> list[Path]:
 
 
 def build_manuscript(chapters: list[Path]) -> str:
-    parts = [INTRO]
+    parts = [load_intro()]
     for p in chapters:
         body = p.read_text(encoding="utf-8").strip()
         parts.append(f"{body}\n\n---\n\n")

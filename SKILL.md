@@ -1,99 +1,143 @@
 ---
 name: Zo-autonovel
-description: Operational pipeline for AI-generated long-form novels — eval, repair, assemble, and render. Scans chapter .md files for AI tells (duplicate drafts, OCR artifacts, em-dash density, AI vocab, canon/banned phrases), applies targeted prose repairs, concatenates into a single manuscript, and produces a print-ready PDF via Pandoc + xelatex. Use when the user wants to QC, polish, or publish an existing chapter-based novel draft, or when they ask to "evaluate my chapters", "fix the AI tells", "compile the manuscript", or "build the novel PDF".
+description: Project-agnostic scaffold for the autonomous novel-writing pipeline. Drop-in templates, framework docs (CRAFT, ANTI-SLOP, ANTI-PATTERNS), LaTeX typeset templates, prose-quality scripts, and the canonical five-layer architecture (voice, world, characters, outline, chapters + canon cross-cutting). Use when the user wants to start, continue, or publish a long-form novel, or when they ask for "autonovel"-style scaffolding.
+created-by: Zo Computer (jaknyfe)
 ---
 
-## What it does
+# Zo-autonovel
 
-Takes a folder of chapter `.md` files and runs four stages:
+A complete, project-agnostic scaffold for producing long-form novels,
+portable from any starting seed. Based on the
+[NousResearch/autonovel](https://github.com/NousResearch/autonovel)
+architecture and integrated into the Zo Computer platform.
 
-1. **Evaluate** — score each chapter against a rule set (AI tells, canon, banned phrases)
-2. **Repair** — apply targeted fixes for OCR artifacts, em-dash density, motif drift
-3. **Assemble** — concatenate chapters (with placeholders stripped) into one manuscript
-4. **Render** — Pandoc + xelatex → PDF (letter / a4 / 6x9 book trim)
+## What this is
 
-The pipeline is **key-clean**: no API keys, no LLM calls, no network. Deterministic, reproducible, CI-friendly.
+A reusable framework, not a finished novel. The original autonovel repo
+shipped alongside a specific production ("The Second Son of the House of Bells").
+This skill is the framework extracted — every project-specific artifact
+(story content, hardcoded paths, "Bells" references) has been stripped.
+What remains is the **scaffold** that any new novel can be built on.
 
-## Quick start
+## The five-layer architecture
 
-From a project root that has `chapters/ch_*.md`:
+```
+  Layer 5:  voice.md          — HOW we write (style, tone, vocabulary)
+  Layer 4:  world.md          — WHAT exists (lore, magic, geography)
+  Layer 3:  characters.md     — WHO acts (registry, arcs, relationships)
+  Layer 2:  outline.md        — WHAT HAPPENS (beats, foreshadowing map)
+  Layer 1:  chapters/ch_NN.md — THE ACTUAL PROSE
+  Cross-cutting: canon.md     — WHAT IS TRUE (hard facts database)
+```
+
+Changes propagate both down (lore → outline → chapter) and up
+(prose reveals gap → update lore → check downstream). Track these
+propagation debts in `state.json`.
+
+## Layout
+
+```
+Skills/Zo-autonovel/
+├── SKILL.md                    — this file
+├── framework/                  — reusable education + automation spec
+│   ├── CRAFT.md                — plot/character/world/prose education
+│   ├── ANTI-SLOP.md            — word-level AI tells
+│   ├── ANTI-PATTERNS.md        — structural AI patterns
+│   ├── PIPELINE.md             — full automation spec (4 phases)
+│   ├── WORKFLOW.md             — step-by-step human guide
+│   └── program.md              — agent instructions per phase
+├── templates/                  — empty shells for a new project
+│   ├── world.md.tmpl
+│   ├── characters.md.tmpl
+│   ├── outline.md.tmpl
+│   ├── voice.md.tmpl
+│   ├── canon.md.tmpl
+│   ├── MYSTERY.md.tmpl
+│   └── state.json.tmpl
+├── scripts/                    — pipeline machinery
+│   ├── compile_manuscript.py
+│   ├── evaluate.py
+│   ├── forensic_eval.py
+│   ├── motif_fix.py
+│   ├── batch_motif_fix.py
+│   ├── prose_pass_v6.py
+│   ├── add_page_breaks.py
+│   ├── ocr_detector.py
+│   ├── strip_em_dashes.py
+│   ├── build_pdf.sh            — generic: manuscript.md → manuscript.pdf
+│   └── init_novel.sh           — bootstrap a new project with templates
+├── typeset/                    — LaTeX + ePub templates
+│   ├── novel.tex               — parameterized (\renewcommand{\booktitle}{...})
+│   ├── build_tex.py            — ENV-driven (CHAPTERS_DIR, OUT_DIR)
+│   ├── epub_metadata.yaml
+│   ├── epub_style.css
+│   ├── epub_front_matter.md
+│   ├── epub_back_cover.md
+│   └── epub_colophon.md
+├── assets/                     — per-project media (cover, ornaments, audio)
+│   └── README.md
+└── examples/                   — usage patterns
+    └── README.md
+```
+
+## Quick start (bootstrapping a new novel)
 
 ```bash
-# 1. Score
-python3 scripts/evaluate.py                # full pass → eval_logs/*.json
-python3 scripts/evaluate.py --chapter ch_13
-python3 scripts/evaluate.py --strict       # promote warnings → errors
+# 1. Initialize a new project directory
+bash ~/workspace/Skills/Zo-autonovel/scripts/init_novel.sh ~/my-novel
+cd ~/my-novel
 
-# 2. Repair
-python3 scripts/strip_em_dashes.py chapters/ 0.5   # cap em-dash density
-python3 scripts/ocr_detector.py chapters/        # OCR-artifact repair pass
-python3 scripts/prose_pass_v6.py chapters/        # targeted prose polish
-python3 scripts/motif_fix.py chapters/            # motif consistency
-python3 scripts/batch_motif_fix.py                # batch motif fix across all chapters
+# 2. Edit seed.txt with your concept, then fill templates
+$EDITOR templates/seed.txt
+cp ../Skills/Zo-autonovel/templates/world.md.tmpl world.md
+cp ../Skills/Zo-autonovel/templates/characters.md.tmpl characters.md
+# … etc for outline, voice, canon, MYSTERY, state.json
+$EDITOR world.md characters.md outline.md voice.md canon.md MYSTERY.md
 
-# 3. Assemble
-python3 scripts/compile_manuscript.py            # write manuscript.md
-python3 scripts/compile_manuscript.py --check    # CI: exit 1 if out of date
+# 3. Phase 1: Foundation (loop until foundation_score > 7.5)
+# Read framework/PIPELINE.md Phase 1, then iterate
 
-# 4. Render
-bash scripts/build_pdf.sh                        # full rebuild + PDF
-bash scripts/build_pdf.sh --skip-compile         # render only
-python3 scripts/add_page_breaks.py               # ensure chapter starts land on new pages
+# 4. Phase 2: Drafting (sequential chapters)
+mkdir chapters
+# Write each chapter using framework/program.md guidance
+
+# 5. Phase 3: Revision cycles
+python3 ../Skills/Zo-autonovel/scripts/evaluate.py --chapter=NN
+python3 ../Skills/Zo-autonovel/scripts/evaluate.py --adversarial chapters/ch_NN.md
+python3 ../Skills/Zo-autonovel/scripts/motif_fix.py chapters/ch_NN.md
+
+# 6. Compile and typeset
+python3 ../Skills/Zo-autonovel/scripts/compile_manuscript.py
+cd typeset
+CHAPTERS_DIR=../chapters OUT_DIR=. python3 ../Skills/Zo-autonovel/typeset/build_tex.py
+# Edit novel.tex to set \renewcommand{\booktitle}{Your Title} etc.
+tectonic novel.tex   # or: xelatex novel.tex
 ```
 
-## Scripts
+## Phase model
 
-| Script | Purpose |
-|---|---|
-| `evaluate.py` | Per-chapter AI-tell scorer (errors -0.5, warnings -0.15) |
-| `forensic_eval.py` | Deep forensic pass: duplicate drafts, rule-of-three, numbering drift |
-| `ocr_detector.py` | Repair OCR artifacts (`nothin,ot`-style, doubled words) |
-| `prose_pass_v6.py` | Targeted prose-level polish |
-| `motif_fix.py` | Motif consistency repairs |
-| `batch_motif_fix.py` | Motif-batch runner |
-| `strip_em_dashes.py` | Cap em-dash density (default: 2 per 1000 words) |
-| `compile_manuscript.py` | Canonical-order chapter → manuscript.md |
-| `add_page_breaks.py` | Ensure chapter sections start on new pages |
-| `build_pdf.sh` | manuscript.md → PDF via pandoc + xelatex |
+| Phase | Output | Exit criterion |
+|-------|--------|----------------|
+| 1. Foundation | world/characters/outline/voice/canon/MYSTERY filled | foundation_score > 7.5 AND lore_score > 7.0 |
+| 2. First Draft | chapters/ch_01.md … ch_NN.md | every chapter score > 6.0 |
+| 3a. Auto Revision | cut logs, panel results, rewritten chapters | score plateau (Δ < 0.5 across 2 cycles) |
+| 3b. Opus Review | deep prose-level review + targeted fixes | no major unqualified items remain |
+| 4. Export | typeset/novel.pdf, ePub | — |
 
-## Scoring model
-
-Each chapter starts at **10.0**. Deductions:
-
-| Pattern | Type | Source |
-|---|---|---|
-| duplicated_drafts | error (-0.5) | three identical sentences, echo paragraphs |
-| ocr_artifacts | error (-0.5) | `nothin, ot`-style comma artifacts, doubled words |
-| numbering_drift | error (-0.5) | multiple Chapter headers, file/header mismatch |
-| rule_of_three | warn (-0.15) | anaphora triples, "It's not X, it's Y" |
-| em_dash_density | warn (-0.15) | >2 em dashes per 1000 words |
-| ai_vocab | warn (-0.15) | delve, foster, testament, … |
-| banned | error (-0.5) | `voice.md` banned phrases |
-| canon_violation | error (-0.5) | `voice.md` / `canon.md` contradictions |
-
-Novel score = chapter average. Floor 0.
-
-## Project layout convention
-
-```
-my-novel/
-├── chapters/                # ch_01.md, ch_02.md, … (alphanumeric sort)
-├── manuscript.md            # generated
-├── voice.md                 # banned phrases + canon rules (manual)
-├── canon.md                 # world facts (manual)
-├── eval_logs/               # timestamped JSON reports
-└── my-novel.pdf             # generated
-```
-
-## Dependencies
-
-- Python 3.10+
-- `pandoc` ≥ 2.17
-- `xelatex` (TeX Live)
-- No network, no API keys.
+Full specification: `framework/PIPELINE.md`.
 
 ## Provenance
 
-Based on https://github.com/NousResearch/autonovel and integrated into the Zo Computer platform. Check out [Zo Computer](https://www.zo.computer/?productId=www.zo.computer&ucc=3PhIcfyf8Vm&celloN=RC5FLg).
+Based on https://github.com/NousResearch/autonovel and integrated into
+the Zo Computer platform. Check out
+[Zo Computer](https://www.zo.computer/?productId=www.zo.computer&ucc=3PhIcfyf8Vm&celloN=RC5FLg).
 
-Extracted and generalized from a completed long-form novel production pipeline. Project-agnostic: no embedded novel-specific identifiers, chapter counts, word counts, or scoring baselines.
+Extracted and generalized from a completed long-form novel production
+pipeline into a reusable scaffold.
+
+## Requirements
+
+- Python 3.10+
+- `pandoc` ≥ 2.17
+- `xelatex` (TeX Live) or `tectonic`
+- No network, no API keys (scoring is mechanical)

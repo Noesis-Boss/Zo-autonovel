@@ -1,53 +1,49 @@
 #!/usr/bin/env bash
-# Build the novel PDF from manuscript.md.
-#
-# Rebuilds manuscript.md from chapters/ first (compile_manuscript.py),
-# then renders manuscript.md -> Bound-by-Ash-and-Thorn.pdf with pandoc/xelatex.
-# Also produces the lower-case copy (bound-by-ash-and-thorn.pdf) used by the
-# attachment pipelines that reference a flat filename.
-#
-# Layout: 1-inch margins, Latin Modern Roman 12pt, Letter paper.
+# Generic PDF builder. Builds manuscript.pdf from manuscript.md using pandoc/xelatex.
 #
 # Usage:
-#   bash scripts/build_pdf.sh                # full build
-#   bash scripts/build_pdf.sh --skip-compile # assume manuscript.md is current
+#   bash build_pdf.sh                 # builds manuscript.pdf in current dir
+#   bash build_pdf.sh --out my.pdf    # custom output filename
+#
+# Inputs:
+#   manuscript.md          -- compiled markdown (use compile_manuscript.py if
+#                             chapters/ contains chapter files)
+#   typeset/novel.tex      -- optional LaTeX template (preferred for trade
+#                             paperback quality). If present, will use it.
+#
+# Outputs:
+#   manuscript.pdf or <out>.pdf
 #
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
-
-SKIP_COMPILE=0
+OUT="manuscript.pdf"
+SKIP_TEX=0
 for arg in "$@"; do
   case "$arg" in
-    --skip-compile) SKIP_COMPILE=1 ;;
-    *) echo "Unknown arg: $arg" >&2; exit 2 ;;
+    --out=*) OUT="${arg#--out=}" ;;
+    --out) shift; OUT="${1:-manuscript.pdf}" ;;
+    --skip-tex) SKIP_TEX=1 ;;
   esac
 done
 
-if [ "$SKIP_COMPILE" -eq 0 ]; then
-  python3 scripts/compile_manuscript.py
+if [[ ! -f manuscript.md ]]; then
+  echo "manuscript.md not found. Run compile_manuscript.py first or place manuscript.md here." >&2
+  exit 1
 fi
 
-# Concatenate front matter (title + copyright) with manuscript body.
-{
-  cat title_page.md
-  cat manuscript.md
-} > manuscript_full.md
-
-pandoc manuscript_full.md \
-  -o Bound-by-Ash-and-Thorn.pdf \
-  --pdf-engine=xelatex \
-  --toc \
-  --toc-depth=2 \
-  -V geometry:margin=1in \
-  -V mainfont="Latin Modern Roman"
-
-cp Bound-by-Ash-and-Thorn.pdf bound-by-ash-and-thorn.pdf
-
-rm manuscript_full.md
-
-WORDS=$(pdftotext Bound-by-Ash-and-Thorn.pdf - | wc -w)
-PAGES=$(pdfinfo Bound-by-Ash-and-Thorn.pdf | awk '/^Pages:/ {print $2}')
-
-echo "Built Bound-by-Ash-and-Thorn.pdf — ${PAGES} pages, ${WORDS} words"
-echo "Mirrored to bound-by-ash-and-thorn.pdf"
+if [[ -f typeset/novel.tex && $SKIP_TEX -eq 0 ]]; then
+  echo "Using LaTeX template at typeset/novel.tex"
+  python3 typeset/build_tex.py
+  (cd typeset && tectonic novel.tex)
+  cp typeset/novel.pdf "$OUT"
+else
+  echo "Rendering manuscript.md -> $OUT via pandoc/xelatex"
+  pandoc manuscript.md \
+    --pdf-engine=xelatex \
+    --toc --toc-depth=2 \
+    -V geometry:margin=1in \
+    -V fontsize=12pt \
+    -V documentclass=article \
+    -o "$OUT"
+fi
+echo "Built: $OUT"

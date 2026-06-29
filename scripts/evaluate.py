@@ -32,6 +32,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
+from typing import Dict
 
 ROOT = Path(__file__).resolve().parent.parent
 CHAPTERS_DIR = ROOT / "chapters"
@@ -343,14 +344,211 @@ def evaluate_chapter(path: Path, all_chapter_files: list[str],
     )
 
 
+# ---------------------------------------------------------------------------
+# Foundation / full-novel scoring (LLM judge)
+# ---------------------------------------------------------------------------
+
+FOUNDATION_FILES = ["world.md", "characters.md", "outline.md",
+                    "voice.md", "canon.md", "MYSTERY.md"]
+
+
+def evaluate_foundation(strict: bool = False) -> Dict:
+    """Score the foundation layer (world, characters, outline, voice, canon, mystery)
+    via Claude Opus as literary judge.
+
+    Returns dict with foundation_score, lore_score, weakest_dimension, report_path.
+    """
+    from anthropic import Anthropic
+
+    materials = []
+    for name in FOUNDATION_FILES:
+        p = ROOT / name
+        if p.exists():
+            materials.append((name, p.read_text()[:8000]))  # 8k cap per file
+        else:
+            materials.append((name, ""))
+    if not any(c for _, c in materials):
+        return {"foundation_score": 0.0, "lore_score": 0.0,
+                "weakest_dimension": "presence",
+                "report": "no foundation files"}
+
+    system = (
+        "You are a literary fiction editor evaluating the foundation "
+        "documents (world bible, character registry, outline, voice, "
+        "canon, central mystery) of an in-progress fantasy novel. Score "
+        "the foundation on a 0-10 scale across these dimensions, then "
+        "identify the single weakest dimension.\n\n"
+        "Dimensions (each 0-10):\n"
+        "  lore_interconnection — magic affects politics, history explains "
+        "factions, geography shapes culture. The deeper the cross-layer "
+        "links, the higher the score.\n"
+        "  character_specificity — wounds/wants/needs/lies are concrete, "
+        "speech patterns distinct, arcs are non-generic.\n"
+        "  outline_tension — central tension is clear, cost/constraint "
+        "is real, foreshadowing ledger is plausible, beats escalate.\n"
+        "  voice_consistency — guardrails in voice.md part 1 are present, "
+        "and there is enough in part 2 (or a foundation of trial passages) "
+        "to steer prose away from AI defaults.\n"
+        "  canon_coverage — hard-facts database cross-references world, "
+        "characters, and outline so the prose cannot contradict itself.\n"
+        "  mystery_clarity — there is a clear central secret the reader "
+        "discovers at climax and it recontextualizes earlier events.\n\n"
+        "Output strictly as JSON:\n"
+        '{"lore": <num>, "characters": <num>, "outline": <num>, '
+        '"voice": <num>, "canon": <num>, "mystery": <num>, '
+        '"comments": "<one paragraph>", '
+        '"weakest_dimension": "<one of lore/characters/outline/voice/canon/mystery>", '
+        '"top_suggestion": "<single concrete next-iteration fix>"}'
+    )
+    user = "Foundation materials:\n\n"
+    for name, text in materials:
+        user += f"=== {name} ===\n{text}\n\n"
+
+    client = Anthropic()
+    resp = client.messages.create(
+        model="claude-opus-4-7",
+        max_tokens=2000,
+        system=system,
+        messages=[{"role": "user", "content": user}],
+    )
+    raw = resp.content[0].text.strip()
+    # extract json
+    import re as _re
+    m = _re.search(r"\{.*\}", raw, _re.S)
+    if not m:
+        return {"foundation_score": 0.0, "lore_score": 0.0,
+                "weakest_dimension": "parse", "raw": raw}
+    data = json.loads(m.group(0))
+    dims = ["lore", "characters", "outline", "voice", "canon", "mystery"]
+    scores = [float(data.get(d, 0)) for d in dims]
+    foundation_score = round(sum(scores) / len(scores), 3)
+    lore_score = float(data.get("lore", 0))
+    EVAL_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = EVAL_LOGS_DIR / f"{stamp}_foundation.json"
+    report_path.write_text(json.dumps({
+        "generated_at": datetime.now().isoformat(),
+        "mode": "foundation",
+        "foundation_score": foundation_score,
+        "lore_score": lore_score,
+        "weakest_dimension": data.get("weakest_dimension"),
+        "top_suggestion": data.get("top_suggestion"),
+        "comments": data.get("comments"),
+        "dimensions": dict(zip(dims, scores)),
+    }, indent=2))
+    return {
+        "foundation_score": foundation_score,
+        "lore_score": lore_score,
+        "weakest_dimension": data.get("weakest_dimension"),
+        "top_suggestion": data.get("top_suggestion"),
+        "report": report_path,
+    }
+
+
+def evaluate_full(strict: bool = False) -> Dict:
+    """Novel-level score after all chapters drafted + revised.
+
+    Sends the arc summary + sample paragraphs to Opus for a holistic read.
+    """
+    from anthropic import Anthropic
+    summary_p = ROOT / "arc_summary.md"
+    if not summary_p.exists():
+        return {"novel_score": 0.0, "note": "no arc_summary.md"}
+    # Concatenate chapter excerpts
+    chapter_files = sorted(
+        f for f in (ROOT / "chapters").iterdir()
+        if f.suffix == ".md" and f.name.startswith("ch_")
+    )
+    if not chapter_files:
+        return {"novel_score": 0.0, "note": "no chapters drafted"}
+    samples = []
+    for cf in chapter_files:
+        # Take first 400 + last 200 words of each chapter
+        words = cf.read_text().split()
+        if len(words) > 600:
+            excerpt = " ".join(words[:400] + ["..."] + words[-200:])
+        else:
+            excerpt = " ".join(words)
+        samples.append(f"=== {cf.name} ===\n{excerpt}")
+    system = (
+        "You are a literary fiction editor reading an entire fantasy "
+        "novel in progress. Score it 0-10 on these dimensions, then "
+        "identify the single weakest:\n"
+        "  theme_coherence, voice_consistency, foreshadowing_payoff, "
+        "  character_life, pacing_curve, prose_quality.\n\n"
+        "Output strictly as JSON:\n"
+        '{"theme": <num>, "voice": <num>, "foreshadowing": <num>, '
+        '"character": <num>, "pacing": <num>, "prose": <num>, '
+        '"comments": "<paragraph>", '
+        '"weakest_chapter": "ch_NN", '
+        '"top_suggestion": "<one fix>", '
+        '"would_recommend": true/false}'
+    )
+    user = f"=== ARC SUMMARY ===\n{summary_p.read_text()}\n\n" + \
+        "\n\n".join(samples)
+    client = Anthropic()
+    resp = client.messages.create(
+        model="claude-opus-4-7",
+        max_tokens=2500,
+        system=system,
+        messages=[{"role": "user", "content": user}],
+    )
+    raw = resp.content[0].text.strip()
+    import re as _re
+    m = _re.search(r"\{.*\}", raw, _re.S)
+    if not m:
+        return {"novel_score": 0.0, "raw": raw}
+    data = json.loads(m.group(0))
+    dims = ["theme", "voice", "foreshadowing", "character", "pacing", "prose"]
+    scores = [float(data.get(d, 0)) for d in dims]
+    novel_score = round(sum(scores) / len(scores), 3)
+    EVAL_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = EVAL_LOGS_DIR / f"{stamp}_full.json"
+    report_path.write_text(json.dumps({
+        "generated_at": datetime.now().isoformat(),
+        "mode": "full",
+        "novel_score": novel_score,
+        "weakest_chapter": data.get("weakest_chapter"),
+        "top_suggestion": data.get("top_suggestion"),
+        "would_recommend": data.get("would_recommend"),
+        "comments": data.get("comments"),
+        "dimensions": dict(zip(dims, scores)),
+    }, indent=2))
+    return {
+        "novel_score": novel_score,
+        "weakest_chapter": data.get("weakest_chapter"),
+        "top_suggestion": data.get("top_suggestion"),
+        "report": report_path,
+    }
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--chapter", help="single chapter file (e.g. ch_01)")
+    p.add_argument("--mode", choices=["chapter", "foundation", "full"],
+                   default="chapter",
+                   help="chapter=per-file scan (default); foundation=LLM-judge foundation docs; "
+                        "full=novel-level LLM read")
     p.add_argument("--strict", action="store_true",
                    help="warn-promotions to errors")
     p.add_argument("--quiet", action="store_true",
                    help="suppress per-finding output")
     args = p.parse_args()
+
+    EVAL_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if args.mode == "foundation":
+        result = evaluate_foundation(strict=args.strict)
+        print(json.dumps({k: str(v) if hasattr(v, "name") else v
+                          for k, v in result.items()}, indent=2))
+        return 0
+
+    if args.mode == "full":
+        result = evaluate_full(strict=args.strict)
+        print(json.dumps({k: str(v) if hasattr(v, "name") else v
+                          for k, v in result.items()}, indent=2))
+        return 0
 
     if not CHAPTERS_DIR.exists():
         print(f"chapters/ not found at {CHAPTERS_DIR}", file=sys.stderr)
@@ -395,7 +593,6 @@ def main() -> int:
                     print(f"   → {f.note}")
 
     # Write report
-    EVAL_LOGS_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     report_path = EVAL_LOGS_DIR / f"{stamp}_evaluate.json"
     report_path.write_text(json.dumps(
