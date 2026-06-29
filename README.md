@@ -1,77 +1,56 @@
 # Zo-autonovel
 
-Operational pipeline for AI-generated long-form novels — eval, repair, assemble, and render.
+Project-agnostic scaffold for AI-generated long-form novels on the Zo Computer platform.
 
-## What it does
+## What this is
 
-Takes a folder of `chapters/ch_*.md` files and runs four stages:
+A reusable framework, not a finished novel. Extracted from a completed production pipeline and generalized for any new novel.
 
-1. **Evaluate** — score each chapter for AI tells (duplicate drafts, OCR artifacts, em-dash density, AI vocab, banned phrases, canon violations)
-2. **Repair** — apply targeted fixes (em-dash cap, OCR cleanup, motif drift)
-3. **Assemble** — concatenate chapters in canonical order into a single `manuscript.md`
-4. **Render** — Pandoc + xelatex → print-ready PDF (letter / a4 / 6x9 book trim)
+## The five-layer architecture
 
-**Key-clean.** No API keys, no LLM calls, no network. Deterministic, reproducible, CI-friendly.
+```
+Layer 5:  voice.md          — HOW we write (style, tone, vocabulary)
+Layer 4:  world.md          — WHAT exists (lore, magic, geography)
+Layer 3:  characters.md     — WHO acts (registry, arcs, relationships)
+Layer 2:  outline.md        — WHAT HAPPENS (beats, foreshadowing map)
+Layer 1:  chapters/ch_NN.md — THE ACTUAL PROSE
+Cross-cutting: canon.md     — WHAT IS TRUE (hard facts database)
+```
+
+## Layout
+
+```
+Skills/Zo-autonovel/
+├── SKILL.md                    — skill specification
+├── framework/                  — education + automation spec
+│   ├── CRAFT.md                — plot/character/world/prose education
+│   ├── ANTI-SLOP.md            — word-level AI tells
+│   ├── ANTI-PATTERNS.md        — structural AI patterns
+│   ├── PIPELINE.md             — full automation spec (4 phases)
+│   ├── WORKFLOW.md             — step-by-step human guide
+│   └── program.md              — agent instructions per phase
+├── templates/                  — empty shells for new projects
+├── scripts/                    — pipeline machinery
+├── typeset/                    — LaTeX + ePub templates
+├── assets/                     — per-project media
+└── examples/                   — usage patterns
+```
 
 ## Quick start
 
 ```bash
-# 1. Score
-python3 scripts/evaluate.py
-python3 scripts/evaluate.py --chapter ch_13
-python3 scripts/evaluate.py --strict
-
-# 2. Repair
-python3 scripts/strip_em_dashes.py chapters/ 0.5
-python3 scripts/ocr_detector.py chapters/
-python3 scripts/prose_pass_v6.py chapters/
-python3 scripts/motif_fix.py chapters/
-python3 scripts/batch_motif_fix.py
-
-# 3. Assemble
-python3 scripts/compile_manuscript.py
-python3 scripts/compile_manuscript.py --check    # CI gate
-
-# 4. Render
-bash scripts/build_pdf.sh
-bash scripts/build_pdf.sh --skip-compile
-python3 scripts/add_page_breaks.py
+bash Skills/Zo-autonovel/scripts/init_novel.sh ~/my-novel
 ```
 
-## Project layout convention
+## Scoring
 
-```
-my-novel/
-├── chapters/                # ch_01.md, ch_02.md, …
-├── manuscript.md            # generated
-├── voice.md                 # banned phrases + canon rules (manual)
-├── canon.md                 # world facts (manual)
-├── eval_logs/               # timestamped JSON reports
-└── my-novel.pdf             # generated
-```
+Each chapter starts at **10.0**. Errors deduct 0.5, warnings 0.15.
 
-## Scoring model
-
-Each chapter starts at **10.0**. Errors deduct 0.5, warnings 0.15. Novel score = chapter average.
-
-| Pattern | Type | Source |
-|---|---|---|
-| duplicated_drafts | error | humanizer #27 — duplicate paragraphs, three identical sentences |
-| ocr_artifacts | error | humanizer #28 — `nothin, ot`-style comma artifacts, doubled words |
-| numbering_drift | error | humanizer #29 — multiple Chapter headers, file/header mismatch |
-| rule_of_three | warn | humanizer #11 — anaphora triples, "It's not X, it's Y" |
-| em_dash_density | warn | humanizer #7 — >2 em dashes per 1000 words |
-| ai_vocab | warn | humanizer #8 — delve, foster, testament, … |
-| banned | error | `voice.md` |
-| canon_violation | error | `voice.md` / `canon.md` |
-
-## Dependencies
+## Requirements
 
 - Python 3.10+
-- `pandoc` ≥ 2.17
-- `xelatex` (TeX Live)
-- No network, no API keys.
-
+- pandoc ≥ 2.17
+- xelatex (TeX Live) or tectonic
 
 ## License
 
