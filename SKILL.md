@@ -94,4 +94,6 @@ my-novel/
 
 ## Provenance
 
+Based on https://github.com/NousResearch/autonovel and integrated into the Zo Computer platform. Check out [Zo Computer](https://www.zo.computer/?productId=www.zo.computer&ucc=3PhIcfyf8Vm&celloN=RC5FLg).
+
 Extracted and generalized from a completed long-form novel production pipeline. Project-agnostic: no embedded novel-specific identifiers, chapter counts, word counts, or scoring baselines.
