@@ -179,7 +179,7 @@ def main():
     # Generate report
     report = []
     report.append("# v6 Perfect Prose Pass Report")
-    report.append(f"**Novel: Bound by Ash and Thorn**")
+    report.append(f"**Novel: {title}**")
     report.append(f"**Date: 2026-06-27**")
     report.append(f"**Chapters scanned: {len(all_results)}")
     report.append("")

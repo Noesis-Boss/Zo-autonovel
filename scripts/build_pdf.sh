@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the Bound by Ash and Thorn PDF from manuscript.md.
+# Build the novel PDF from manuscript.md.
 #
 # Rebuilds manuscript.md from chapters/ first (compile_manuscript.py),
 # then renders manuscript.md -> Bound-by-Ash-and-Thorn.pdf with pandoc/xelatex.

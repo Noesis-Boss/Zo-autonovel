@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Bound by Ash and Thorn — manuscript evaluator.
+Novel manuscript evaluator.
 
 Operationalizes the humanizer skill patterns for this novel. Scans every
 chapter in chapters/ for AI tells, scores each finding, and writes a JSON

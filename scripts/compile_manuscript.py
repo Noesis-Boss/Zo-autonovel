@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CHAPTERS_DIR = ROOT / "chapters"
 MANUSCRIPT = ROOT / "manuscript.md"
 INTRO = (
-    "# Bound by Ash and Thorn\n\n"
+    "# Novel Manuscript\n\n"
     "*The Withered Court, Book One* — *A novel by Jonathan Thorne — 99,000+ words, 26 chapters*\n\n"
     "---\n\n"
 )

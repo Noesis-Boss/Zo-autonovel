@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 Forensic AI-detection scanner — implements the reviewer checklist from the
-independent AI-detection review that scored Bound by Ash and Thorn 80-95%
-AI-assisted.
+independent AI-detection review (per-tool calibration).
 
 Five highest-signal checks (per Skills/humanizer/SKILL.md #30-34 + the
 forensic-reviewer checklist):
